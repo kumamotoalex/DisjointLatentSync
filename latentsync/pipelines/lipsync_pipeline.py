@@ -58,6 +58,8 @@ class LipsyncPipeline(DiffusionPipeline):
         ],
     ):
         super().__init__()
+        self.run_type = None
+        self.affine_output_path = "affine_output.pt"
 
         if (
             hasattr(scheduler.config, "steps_offset")
@@ -355,15 +357,42 @@ class LipsyncPipeline(DiffusionPipeline):
             out_frames.append(out_frame)
         return np.stack(out_frames, axis=0)
 
+    def save_affine_data(self, faces: torch.Tensor, boxes: list, affine_matrices: list):
+        """Save affine transform data to a file."""
+        torch.save(
+            {"faces": faces, "boxes": boxes, "affine_matrices": affine_matrices},
+            self.affine_output_path,
+        )
+        print(f"Saved affine transform data to {self.affine_output_path}")
+
+    def load_affine_data(self):
+        """Load affine transform data from a file."""
+        if not os.path.exists(self.affine_output_path):
+            raise FileNotFoundError(
+                f"Affine transform data not found at {self.affine_output_path}"
+            )
+        data = torch.load(self.affine_output_path)
+        print(f"Loaded affine transform data from {self.affine_output_path}")
+        return data["faces"], data["boxes"], data["affine_matrices"]
+
     def loop_video(self, whisper_chunks: list, video_frames: np.ndarray):
-        # If the audio is longer than the video, we need to loop the video
-        if len(whisper_chunks) > len(video_frames):
+        # Get initial face data based on run type
+        if self.run_type == "FACE":
             faces, boxes, affine_matrices = self.affine_transform_video(video_frames)
+            self.save_affine_data(faces, boxes, affine_matrices)
+        elif self.run_type == "INFER":
+            faces, boxes, affine_matrices = self.load_affine_data()
+        else:  # run_type is None
+            faces, boxes, affine_matrices = self.affine_transform_video(video_frames)
+
+        # Handle video looping logic
+        if len(whisper_chunks) > len(video_frames):
             num_loops = math.ceil(len(whisper_chunks) / len(video_frames))
             loop_video_frames = []
             loop_faces = []
             loop_boxes = []
             loop_affine_matrices = []
+
             for i in range(num_loops):
                 if i % 2 == 0:
                     loop_video_frames.append(video_frames)
@@ -384,7 +413,9 @@ class LipsyncPipeline(DiffusionPipeline):
             affine_matrices = loop_affine_matrices[: len(whisper_chunks)]
         else:
             video_frames = video_frames[: len(whisper_chunks)]
-            faces, boxes, affine_matrices = self.affine_transform_video(video_frames)
+            faces = faces[: len(whisper_chunks)]
+            boxes = boxes[: len(whisper_chunks)]
+            affine_matrices = affine_matrices[: len(whisper_chunks)]
 
         return video_frames, faces, boxes, affine_matrices
 
@@ -408,10 +439,12 @@ class LipsyncPipeline(DiffusionPipeline):
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
+        run_type: Optional[str] = None,
         **kwargs,
     ):
         is_train = self.denoising_unet.training
         self.denoising_unet.eval()
+        self.run_type = run_type
 
         check_ffmpeg_installed()
 
