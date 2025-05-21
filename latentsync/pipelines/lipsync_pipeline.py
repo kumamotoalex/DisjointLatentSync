@@ -383,6 +383,8 @@ class LipsyncPipeline(DiffusionPipeline):
         elif self.run_type == "INFER":
             faces, boxes, affine_matrices = self.load_affine_data()
         else:  # run_type is None
+            if len(whisper_chunks) < len(video_frames):
+                video_frames = video_frames[: len(whisper_chunks)]
             faces, boxes, affine_matrices = self.affine_transform_video(video_frames)
 
         # Handle video looping logic
