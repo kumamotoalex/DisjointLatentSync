@@ -94,6 +94,7 @@ def main(config, args):
         height=config.data.resolution,
         mask_image_path=config.data.mask_image_path,
         run_type=args.run_type,
+        affine_output_path=args.affine_output_path,
     )
 
 
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--run_type", type=str, default=None, choices=["FACE", "INFER", None]
     )
+    parser.add_argument("--affine_output_path", type=str, default="affine_output.pt")
     args = parser.parse_args()
 
     config = OmegaConf.load(args.unet_config_path)
