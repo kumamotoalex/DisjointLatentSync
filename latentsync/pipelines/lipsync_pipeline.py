@@ -442,11 +442,13 @@ class LipsyncPipeline(DiffusionPipeline):
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
         run_type: Optional[str] = None,
+        affine_output_path: Optional[str] = "affine_output.pt",
         **kwargs,
     ):
         is_train = self.denoising_unet.training
         self.denoising_unet.eval()
         self.run_type = run_type
+        self.affine_output_path = affine_output_path
 
         check_ffmpeg_installed()
 
